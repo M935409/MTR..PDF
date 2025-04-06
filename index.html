@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محول الصور إلى PDF و PNG و ZIP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .background {
+            background-color: #1e293b; /* أزرق رمادي غامق */
+            height: 100vh;
+            color: #000000; /* لون النص عشان يكون واضح */
+        }
+
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        h1 { font-size: 2rem; }
+
+        @media (max-width: 640px) {
+            h1 { font-size: 1.5rem !important; }
+        }
+
+        /* أنماط إضافية لتحسين المظهر */
+        #drop-area {
+            transition: border-color 0.3s ease;
+        }
+        #drop-area.dragover {
+            border-color: #3b82f6; /* لون الحد عند السحب فوق المنطقة */
+        }
+        #preview-area img {
+            transition: transform 0.2s ease;
+        }
+        #preview-area img:hover {
+            transform: scale(1.05);
+        }
+        .remove-btn {
+            transition: background-color 0.3s ease;
+        }
+        .remove-btn:hover {
+            background-color: #dc2626; /* لون أحمر أغمق عند الحذف */
+        }
+        #convert-button:disabled {
+            opacity: 0.5; /* تقليل الشفافية عند التعطيل */
+            cursor: not-allowed;
+        }
+        #convert-button:not(:disabled):hover {
+            filter: brightness(95%); /* تأثير التعتيم عند التفعيل والتحويم */
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.5.3/jspdf.debug.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.5.0/jszip.min.js"></script>
+    <script>
+        // إضافة وظيفة إضافية: فحص نوع الملف وحجمه
+        function validateFile(file) {
+            const validImageTypes = ['image/jpeg', 'image/png', 'image/gif'];
+            const maxSizeInMB = 5; // الحد الأقصى لحجم الملف 5 ميغابايت
+            const maxSizeInBytes = maxSizeInMB * 1024 * 1024;
+
+            if (!validImageTypes.includes(file.type)) {
+                return { valid: false, message: 'نوع الملف غير صالح. يرجى اختيار صورة JPEG أو PNG أو GIF.' };
+            }
+
+            if (file.size > maxSizeInBytes) {
+                return { valid: false, message: `حجم الملف يتجاوز ${maxSizeInMB} ميغابايت.` };
+            }
+
+            return { valid: true, message: '' };
+        }
+    </script>
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logo with Glow Effect</title>
+    <style>
+        /* تأثير اللمعان حول الشعار */
+        @keyframes glow {
+            0% {
+                box-shadow: 0 0 10px rgba(0, 255, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.5), 0 0 30px rgba(0, 255, 255, 0.5);
+            }
+            100% {
+                box-shadow: 0 0 20px rgba(0, 255, 255, 1), 0 0 30px rgba(0, 255, 255, 1), 0 0 40px rgba(0, 255, 255, 1);
+            }
+        }
+
+        .logo-glow {
+            animation: glow 1.5s ease-in-out infinite alternate;
+            border-radius: 50%; /* لتصميم الشعار بشكل دائري */
+        }
+    </style>
+</head>
+<body class="background">
+    <div class="flex flex-col items-center justify-center min-h-screen py-10">
+        <!-- الشعار مع تأثير اللمعان -->
+        <img src="eb3129af-f189-4dae-898e-53b840d62e1b.png" alt="Logo" class="logo-glow mb-6 w-32 h-32 bg-transparent">
+
+        <h1 class="text-3xl font-semibold text-white mb-8">PDF أو PNG أو ZIP حوّل الصور إلى </h1>
+        <div class="bg-white rounded-lg shadow-md p-8 w-full max-w-md">
+            <div id="drop-area" class="border-2 border-dashed border-gray-300 rounded-md p-6 text-center cursor-pointer">
+                <p class="text-gray-600">اسحب الصور وأفلتها هنا، أو</p>
+                <label for="file-input" class="mt-6 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md cursor-pointer block">اختر الملفات</label>
+                <input type="file" id="file-input" multiple accept="image/*" class="hidden">
+                <p id="file-name" class="mt-4 text-gray-500"></p>
+                <div class="mt-4">
+                    <span id="selected-files-count" class="text-gray-600"></span>
+                </div>
+            </div>
+            <div id="preview-area" class="mt-6 space-y-4"></div>
+            <label for="filename-input" class="mt-4 text-gray-600">اسم الملف:</label>
+            <input type="text" id="filename-input" class="mt-2 p-2 w-full border rounded-md" placeholder="أدخل اسم الملف">
+            <div class="mt-4">
+                <label class="text-gray-600">اختر صيغة الملف:</label>
+                <select id="file-format" class="mt-2 p-2 w-full border rounded-md">
+                    <option value="pdf">PDF</option>
+                    <option value="png">PNG</option>
+                    <option value="zip">ZIP</option>
+                </select>
+            </div>
+            <button id="convert-button" class="mt-8 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md w-full" disabled>حوّل واحفظ</button>
+            <p id="error-message" class="mt-4 text-red-500 text-center"></p>
+            <p id="loading-message" class="mt-4 text-gray-700 text-center hidden">جاري التحويل...</p>
+            <div id="conversion-summary" class="mt-6 p-4 bg-gray-100 rounded-md hidden">
+                <h2 class="text-lg font-semibold text-gray-800 mb-2">ملخص التحويل:</h2>
+                <p id="summary-images-count" class="text-gray-700"></p>
+                <p id="summary-file-format" class="text-gray-700"></p>
+                <p id="summary-file-name" class="text-gray-700"></p>
+                <p id="summary-file-size" class="text-gray-700"></p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+
+    <script>
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('file-input');
+        const fileNameDisplay = document.getElementById('file-name');
+        const previewArea = document.getElementById('preview-area');
+        const convertButton = document.getElementById('convert-button');
+        const errorMessage = document.getElementById('error-message');
+        const loadingMessage = document.getElementById('loading-message');
+        const filenameInput = document.getElementById('filename-input');
+        const fileFormatSelect = document.getElementById('file-format');
+        const selectedFilesCount = document.getElementById('selected-files-count'); // عدد الملفات
+        const conversionSummary = document.getElementById('conversion-summary');
+        const summaryImagesCount = document.getElementById('summary-images-count');
+        const summaryFileFormat = document.getElementById('summary-file-format');
+        const summaryFileName = document.getElementById('summary-file-name');
+        const summaryFileSize = document.getElementById('summary-file-size');
+
+        let images = [];
+        let totalFileSize = 0; // لحفظ حجم الملفات
+
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('border-blue-500');
+            dropArea.classList.add('dragover'); // إضافة كلاس إضافي
+        });
+
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('border-blue-500');
+            dropArea.classList.remove('dragover');
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('border-blue-500');
+            dropArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', () => {
+            handleFiles(fileInput.files);
+        });
+
+        function handleFiles(files) {
+            previewArea.innerHTML = '';
+            errorMessage.textContent = '';
+            totalFileSize = 0; // إعادة تعيين الحجم
+
+            const newFiles = Array.from(files);
+
+            if ((images.length + newFiles.length) > 30) {
+                errorMessage.textContent = 'الحد الأقصى هو 30 صورة فقط.';
+                return;
+            }
+
+            newFiles.forEach(file => {
+                const validationResult = validateFile(file);
+                if (!validationResult.valid) {
+                    errorMessage.textContent = validationResult.message;
+                    return; // توقف المعالجة إذا كان الملف غير صالح
+                }
+                images.push(file);
+                totalFileSize += file.size;
+            });
+
+            displayPreviews();
+            fileNameDisplay.textContent = `${images.length} صورة محددة`;
+            selectedFilesCount.textContent = `تم اختيار ${images.length} ملفًا`; // تحديث العدد
+            convertButton.disabled = images.length === 0;
+        }
+
+        function displayPreviews() {
+            previewArea.innerHTML = '';
+            images.forEach((image, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const container = document.createElement('div');
+                    container.classList.add('relative');
+
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.classList.add('rounded-md', 'shadow-sm', 'mb-2');
+                    img.style.maxWidth = '100%';
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.textContent = 'حذف';
+                    removeBtn.className = 'absolute top-1 left-1 bg-red-600 text-white text-sm px-2 py-1 rounded remove-btn';
+                    removeBtn.onclick = () => {
+                        images.splice(index, 1);
+                        displayPreviews();
+                        fileNameDisplay.textContent = `${images.length} صورة محددة`;
+                        selectedFilesCount.textContent = `تم اختيار ${images.length} ملفًا`; // تحديث العدد
+                        convertButton.disabled = images.length === 0;
+                        // Also update totalFileSize
+                        totalFileSize = 0;
+                        images.forEach(imgFile => {
+                            totalFileSize += imgFile.size;
+                        });
+                    };
+
+                    container.appendChild(img);
+                    container.appendChild(removeBtn);
+                    previewArea.appendChild(container);
+                };
+                reader.readAsDataURL(image);
+            });
+        }
+
+        convertButton.addEventListener('click', () => {
+            if (images.length === 0) {
+                errorMessage.textContent = 'يرجى تحديد صورة واحدة على الأقل.';
+                return;
+            }
+
+            const filename = filenameInput.value.trim() || 'صور';
+            const fileFormat = fileFormatSelect.value;
+
+            loadingMessage.classList.remove('hidden');
+            errorMessage.textContent = '';
+            convertButton.disabled = true;
+            conversionSummary.classList.add('hidden'); // إخفاء الملخص
+
+            if (fileFormat === 'pdf') {
+                convertToPDF(filename);
+            } else if (fileFormat === 'png') {
+                convertToPNG(filename);
+            } else if (fileFormat === 'zip') {
+                convertToZIP(filename);
+            }
+        });
+
+        function convertToPDF(filename) {
+            const doc = new jsPDF();
+            let processedImages = 0;
+
+            function processImage(index) {
+                if (index >= images.length) {
+                    doc.save(`${filename}.pdf`);
+                    loadingMessage.classList.add('hidden');
+                    convertButton.disabled = false;
+                    displaySummary(filename, fileFormat, images.length, totalFileSize, `${filename}.pdf`); // عرض الملخص
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+
+                        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                        const width = doc.internal.pageSize.width;
+                        const height = doc.internal.pageSize.height;
+                        const scale = Math.min(width / img.width, height / img.height);
+                        const scaledWidth = img.width * scale;
+                        const scaledHeight = img.height * scale;
+                        const x = (width - scaledWidth) / 2;
+                        const y = (height - scaledHeight) / 2;
+
+                        if (index > 0) {
+                            doc.addPage();
+                        }
+                        doc.addImage(imgData, 'JPEG', x, y, scaledWidth, scaledHeight);
+
+                        processedImages++;
+                        processImage(index + 1);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(images[index]);
+            }
+
+            processImage(0);
+        }
+
+        function convertToPNG(filename) {
+            if (images.length === 1) {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    canvas.toBlob((blob) => {
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(blob);
+                        link.download = `${filename}.png`;
+                        link.click();
+                        loadingMessage.classList.add('hidden');
+                        convertButton.disabled = false;
+                        displaySummary(filename, fileFormat, images.length, totalFileSize, `${filename}.png`); // عرض الملخص
+
+                    });
+                };
+                img.src = URL.createObjectURL(images[0]);
+            } else {
+                errorMessage.textContent = 'التحويل إلى PNG يدعم صورة واحدة فقط.';
+                loadingMessage.classList.add('hidden');
+                convertButton.disabled = false;
+            }
+        }
+
+        function convertToZIP(filename) {
+            const zip = new JSZip();
+            images.forEach((image, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    zip.file(`image${index + 1}.jpg`, e.target.result.split(',')[1], { base64: true });
+                    if (index === images.length - 1) {
+                        zip.generateAsync({ type: 'blob' }).then((content) => {
+                            const link = document.createElement('a');
+                            link.href = URL.createObjectURL(content);
+                            link.download = `${filename}.zip`;
+                            link.click();
+                            loadingMessage.classList.add('hidden');
+                            convertButton.disabled = false;
+                            displaySummary(filename, fileFormat, images.length, totalFileSize, `${filename}.zip`); // عرض الملخص
+                        });
+                    }
+                }
+                reader.readAsDataURL(image);
+            });
+        }
+
+        function displaySummary(fileName, fileFormat, imagesCount, totalFileSize, downloadFileName) {
+            conversionSummary.classList.remove('hidden');
+            summaryFileName.textContent = `اسم الملف: ${fileName}`;
+            summaryFileFormat.textContent = `صيغة الملف: ${fileFormat.toUpperCase()}`;
+            summaryImagesCount.textContent = `عدد الصور: ${imagesCount}`;
+            summaryFileSize.textContent = `الحجم الإجمالي: ${formatFileSize(totalFileSize)}`;
+            // You can add a link to download the file here if needed.
+            // Example:
+            // const downloadLink = document.createElement('a');
+            // downloadLink.href = URL.createObjectURL(yourFileBlob); // Replace yourFileBlob
+            // downloadLink.download = downloadFileName;
+            // downloadLink.textContent = 'Download File';
+            // conversionSummary.appendChild(downloadLink);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
+<p style="text-align: center; font-size: 14px; color: #fff7f7;">© 2024 MTR جميع الحقوق محفوظة.</p>
+<p style="text-align: center; font-size: 14px; color: #fff7f7;"> { M T R } تصميم : مهاب طارق </p>
